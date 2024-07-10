@@ -1,60 +1,79 @@
 import pandas as pd
 from tqdm import tqdm
 
-def calculate_series(data):
+# Fonction pour calculer la série et les vies
+def calculate_series_and_lives(df):
+    df['serie'] = 0
+    df['lives'] = 2
 
-    series = 0
+    # Trier les données par SessionID et Date pour un traitement séquentiel correct
+    df.sort_values(by=['SessionID', 'Date'], inplace=True)
+
+    previous_session_id = None
+    previous_date = None
+    consecutive_days = 0
     lives = 2
-    max_lives = 2
-    
-    data['serie'] = 0
-    grouped = data.groupby(['formattedDate', 'SessionID'])
-    
-    processed_groups = []
-    for name, group in tqdm(grouped, desc="Processing", total=len(grouped)):
-        valid_session = False
+    serie = 0
 
-        # Vérification si la session est valide (deux exercices de 5 minutes ou un exercice de 10 minutes)
-        if (group['Niveau'] == 1).sum() >= 2 or (group['Niveau'] == 2).sum() >= 1:
-            valid_session = True
+    for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing"):
+        current_date = pd.to_datetime(row['Date'])
+        current_session_id = row['SessionID']
 
-        if valid_session:
-            series += 1
+        # Vérifier si nous avons changé de session utilisateur
+        if current_session_id != previous_session_id:
+            previous_date = None
+            consecutive_days = 0
+            lives = 2
+            serie = 0
+
+        if previous_date is not None:
+            days_difference = (current_date - previous_date).days
+            if days_difference == 1:
+                consecutive_days += 1
+                if consecutive_days % 5 == 0 and lives < 2:
+                    lives += 1
+            elif days_difference > 1:
+                days_without_practice = days_difference - 1
+                lives -= days_without_practice
+                if lives < 0:
+                    lives = 0
+                serie = 0
+                consecutive_days = 0
+
+        if row['Allonge'] or row['Assis']:
+            if lives > 0:
+                serie += 1
+            else:
+                serie = 1
+                lives = 2
         else:
             lives -= 1
+            if lives < 0:
+                lives = 0
+            serie = 0
 
-        # Vérification si les vies sont épuisées
-        if lives < 0:
-            series = 0
-            lives = max_lives
+        if lives == 0:
+            serie = 0
+            lives = 2
 
-        # Régénération d'une vie tous les 5 jours consécutifs de pratique
-        if series > 0 and series % 5 == 0:
-            lives = min(lives + 1, max_lives)
+        df.at[index, 'serie'] = serie
+        df.at[index, 'lives'] = lives
 
-        group['serie'] = series
-        processed_groups.append(group)
+        previous_date = current_date
+        previous_session_id = current_session_id
 
-    # Concaténer tous les groupes traités
-    processed_data = pd.concat(processed_groups).reset_index(drop=True)
-    
-    return processed_data
+    return df
 
-if __name__ == "__main__":
-    input_csv_path = 'data/input.csv'
-    output_csv_path = 'data/output.csv'
+# Lire les données d'entrée
+input_file_path = '../data/input.csv'
+output_file_path = '../data/export.csv'
 
-    print(f"Loading data from {input_csv_path}...")
-    data = pd.read_csv(input_csv_path)
+df = pd.read_csv(input_file_path)
 
-    print("Calculating series...")
-    updated_data = calculate_series(data)
+# Calculer les colonnes 'serie' et 'lives'
+df = calculate_series_and_lives(df)
 
-    print(f"Saving updated data to {output_csv_path}...")
+# Sauvegarder les résultats dans le fichier de sortie
+df.to_csv(output_file_path, index=False)
 
-    # Convertir 'Niveau' en entier en conservant uniquement la partie entière pour les valeurs non-nulles
-    updated_data['Niveau'] = updated_data['Niveau'].apply(lambda x: int(str(x).split('.')[0]) if pd.notnull(x) else 0)
-
-    updated_data.to_csv(output_csv_path, index=False, quotechar='"', quoting=1)
-
-    print("Done")
+print(f"Output saved to {output_file_path}")
