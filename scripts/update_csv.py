@@ -3,7 +3,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Charger les données
-df = pd.read_csv('../data/input.csv')
+df = pd.read_csv('data/input.csv')
 
 # Filtrer les lignes où SessionID est null
 df = df[df['SessionID'].notna()]
@@ -22,15 +22,6 @@ df.sort_values(by=['SessionID', 'formattedDate'], inplace=True)
 import pandas as pd
 
 def calculate_daily_practice(df):
-    """
-    Calcul la série de pratiques et gère les vies selon les conditions suivantes:
-    - Une pratique est comptée si 'Allonge' et 'Assis' sont tous les deux True pour un jour.
-    - Une série est incrémentée pour chaque jour consécutif de pratique complète.
-    - Une vie est décomptée si aucune pratique n'est complétée et des vies sont disponibles.
-    - La série est réinitialisée à zéro si aucune pratique n'est complétée et aucune vie n'est disponible.
-    - Les vies sont réinitialisées à deux après une rupture de série.
-    - Une vie est regagnée tous les 5 jours consécutifs de pratique, avec un maximum de 2 vies.
-    """
     results = []
     streak = 0
     lives = 2  # Commencer avec 2 vies par défaut
@@ -39,12 +30,13 @@ def calculate_daily_practice(df):
     df.sort_values('formattedDate', inplace=True)
     last_date = None
 
-    for index, row in df.iterrows():
+    # Intégrer tqdm dans la boucle pour visualiser la progression
+    for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing records"):
         if row['Allonge'] and row['Assis']:
-            if last_date is None or row['formattedDate'] == last_date:
-                streak += 1
-            else:
+            if last_date is None or row['formattedDate'] != last_date:
                 streak = 1
+            else:
+                streak += 1
             last_date = row['formattedDate']
             if streak % 5 == 0 and lives < 2:
                 lives += 1
@@ -55,7 +47,7 @@ def calculate_daily_practice(df):
                 streak = 0
                 lives = 2
 
-        results.append((row['SessionID'], streak, lives))
+        results.append((index, streak, lives))
     
     return results
 
@@ -66,4 +58,4 @@ for index, streak, lives in results:
     df.at[index, 'vies'] = lives
 
 # Sauvegarder le DataFrame modifié
-df.to_csv('../data/output.csv', index=False, quoting=1)
+df.to_csv('data/output.csv', index=False, quoting=1)
