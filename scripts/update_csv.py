@@ -1,7 +1,8 @@
 import pandas as pd
 from tqdm import tqdm
+import argparse
 
-
+def process_user_data(input_path, output_path):
     # Load the provided CSV file
     data_original = pd.read_csv(input_path)
 
@@ -21,7 +22,7 @@ from tqdm import tqdm
         if session_id not in user_stats:
             user_stats[session_id] = {'serie': 0, 'vies': 2, 'last_practiced_date': None}
         
-        stats = user_stats[sessiondef process_user_data(input_path, output_path):_id]
+        stats = user_stats[session_id]
         serie = stats['serie']
         vies = stats['vies']
         last_practiced_date = stats['last_practiced_date']
@@ -124,7 +125,10 @@ from tqdm import tqdm
     # Save the final dataframe to a CSV file
     final_df.to_csv(output_path, index=False)
 
-# Usage example
-input_path = 'data/input.csv'
-output_path = 'data/output.csv'
-process_user_data(input_path, output_path)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Process user data.')
+    parser.add_argument('input_path', type=str, help='Path to the input CSV file')
+    parser.add_argument('output_path', type=str, help='Path to the output CSV file')
+    args = parser.parse_args()
+
+    process_user_data(args.input_path, args.output_path)
