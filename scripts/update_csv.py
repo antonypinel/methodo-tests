@@ -1,61 +1,130 @@
 import pandas as pd
 from tqdm import tqdm
-from datetime import datetime
 
-# Charger les données
-df = pd.read_csv('data/input.csv')
 
-# Filtrer les lignes où SessionID est null
-df = df[df['SessionID'].notna()]
+    # Load the provided CSV file
+    data_original = pd.read_csv(input_path)
 
-# Convertir la colonne 'Date' de timestamp à datetime
-df['formattedDate'] = pd.to_datetime(df['Date'], unit='s')
-df['formattedDate'] = df['formattedDate'].dt.strftime('%Y-%m-%d')
+    # Save the original Date column
+    original_dates = data_original['Date']
 
-# Initialiser les colonnes pour les séances et les vies
-df['serie'] = 0
-df['vies'] = 2
+    # Convert the 'Date' column from UNIX timestamp to datetime and then to GMT+2
+    data_original['Date'] = pd.to_datetime(data_original['Date'], unit='s').dt.tz_localize('UTC').dt.tz_convert('Etc/GMT-2')
 
-# Trier les données par SessionID et date
-df.sort_values(by=['SessionID', 'formattedDate'], inplace=True)
+    # Sort the data by SessionID and Date
+    data_original = data_original.sort_values(by=['SessionID', 'Date']).reset_index(drop=True)
 
-import pandas as pd
+    max_vies = 2
 
-def calculate_daily_practice(df):
-    results = []
-    streak = 0
-    lives = 2  # Commencer avec 2 vies par défaut
-
-    # Tri par date pour s'assurer que le traitement est séquentiel
-    df.sort_values('formattedDate', inplace=True)
-    last_date = None
-
-    # Intégrer tqdm dans la boucle pour visualiser la progression
-    for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing records"):
-        if row['Allonge'] and row['Assis']:
-            if last_date is None or row['formattedDate'] != last_date:
-                streak = 1
+    # Helper function to update series and lives
+    def update_series_and_lives(session_id, date, pratique, user_stats, previous_date):
+        if session_id not in user_stats:
+            user_stats[session_id] = {'serie': 0, 'vies': 2, 'last_practiced_date': None}
+        
+        stats = user_stats[sessiondef process_user_data(input_path, output_path):_id]
+        serie = stats['serie']
+        vies = stats['vies']
+        last_practiced_date = stats['last_practiced_date']
+        
+        # Check if the current date is consecutive to the last practiced date
+        if last_practiced_date is not None and (date - last_practiced_date).days == 1:
+            if pratique:
+                serie += 1
+                if serie % 5 == 0 and vies < max_vies:
+                    vies += 1
             else:
-                streak += 1
-            last_date = row['formattedDate']
-            if streak % 5 == 0 and lives < 2:
-                lives += 1
+                if vies > 0:
+                    vies -= 1
+                else:
+                    serie = 0
+                    vies = max_vies
         else:
-            if lives > 0:
-                lives -= 1
+            if pratique:
+                serie = 1
             else:
-                streak = 0
-                lives = 2
+                if vies > 0:
+                    vies -= 1
+                else:
+                    serie = 0
+                    vies = max_vies
+        
+        # Reset series and lives if vies are negative
+        if vies < 0:
+            serie = 0
+            vies = max_vies
+        
+        if pratique:
+            user_stats[session_id] = {'serie': serie, 'vies': vies, 'last_practiced_date': date}
+        else:
+            user_stats[session_id] = {'serie': serie, 'vies': vies, 'last_practiced_date': last_practiced_date}
+        
+        return {'SessionID': session_id, 'Date': date, 'Serie': serie, 'Vies': vies}
 
-        results.append((index, streak, lives))
-    
-    return results
+    # Group data by user and date
+    users_grouped = data_original.groupby(['SessionID', data_original['Date'].dt.date])
 
-# Mise à jour avec les nouvelles séries et les valeurs des vies
-results = calculate_daily_practice(df)
-for index, streak, lives in results:
-    df.at[index, 'serie'] = streak
-    df.at[index, 'vies'] = lives
+    # Initialize a dictionary to store series and lives for each user
+    user_stats = {}
 
-# Sauvegarder le DataFrame modifié
-df.to_csv('data/output.csv', index=False, quoting=1)
+    # Calculate series and lives for each user
+    calculations = []
+
+    for (session_id, date), group in tqdm(users_grouped, desc="Processing users"):
+        pratique = False
+        
+        # Check if the user has completed the required exercises for the day
+        allonge_valid = False
+        assis_valid = False
+        
+        # Check if the user has completed 2 exercises of 5' or 1 exercise of 10' for allongé and assis
+        for pos in ['Allonge', 'Assis']:
+            niveau_1_count = group[(group['Niveau'] == 1) & (group[pos] == True)].shape[0]
+            niveau_2_count = group[(group['Niveau'] == 2) & (group[pos] == True)].shape[0]
+            
+            if (niveau_1_count >= 2) or (niveau_2_count >= 1):
+                if pos == 'Allonge':
+                    allonge_valid = True
+                elif pos == 'Assis':
+                    assis_valid = True
+        
+        if allonge_valid and assis_valid:
+            pratique = True
+        
+        previous_date = user_stats[session_id]['last_practiced_date'] if session_id in user_stats else None
+        calculation = update_series_and_lives(session_id, date, pratique, user_stats, previous_date)
+        calculations.append(calculation)
+
+    # Convert calculations to DataFrame
+    calculated_df = pd.DataFrame(calculations)
+
+    # Merge the calculated series with the original data
+    data_original['Date_Date'] = data_original['Date'].dt.date
+    merged_df = data_original.merge(calculated_df, left_on=['SessionID', 'Date_Date'], right_on=['SessionID', 'Date'], how='left', suffixes=('', '_Calculated'))
+
+    # Add the correctly calculated series to the original dataframe
+    final_df = data_original.copy()
+    final_df['Serie'] = merged_df['Serie']
+
+    # Restore the original Date column
+    final_df['Date'] = original_dates
+
+    # Handle formattedDate column
+    final_df['formattedDate'] = final_df['formattedDate'].fillna(final_df['Date'].apply(lambda x: pd.to_datetime(x, unit='s').strftime('%Y-%m-%d')))
+
+    # Drop unnecessary columns
+    final_df = final_df.drop(columns=['Date_Date'])
+
+    # Sort the final dataframe by user and date
+    final_df = final_df.sort_values(by=['SessionID', 'Date']).reset_index(drop=True)
+
+    # Select columns to match the original dataframe and add the calculated series column
+    final_columns = ['Date', 'Niveau', 'Allonge', 'Assis', 'SessionID', 'formattedDate', 'Serie']
+    final_df = final_df[final_columns]
+
+    # Save the final dataframe to a CSV file
+    final_df.to_csv(output_path, index=False)
+
+# Usage example
+input_path = 'data/input.csv'
+output_path = 'data/output.csv'
+process_user_data(input_path, output_path)
