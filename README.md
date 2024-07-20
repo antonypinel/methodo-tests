@@ -2,7 +2,7 @@
 
 ### Documents
 
-- Tous les documents relatifs au projet sont dans le répértoire `/documents`.
+- Tous les documents relatifs au projet sont dans le répértoire `documents`.
 
 ### Tester l'algorithme et les tests
 
