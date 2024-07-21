@@ -123,7 +123,7 @@ def process_user_data(input_path, output_path):
     final_df = final_df[final_columns]
 
     # Save the final dataframe to a CSV file
-    final_df.to_csv(output_path, index=False)
+    final_df.to_csv(output_path, quoting=1, index=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process user data.')

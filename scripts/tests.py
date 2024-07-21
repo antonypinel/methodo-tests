@@ -1,0 +1,1 @@
+# Pas eu le temps de coder le banc de test automatique, désolé :c
